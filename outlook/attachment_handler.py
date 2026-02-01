@@ -31,7 +31,9 @@ class AttachmentHandler:
             filename = attachment.FileName
 
             if self.is_pdf(filename):
-                filepath = os.path.join(self.download_folder, filename)
+                from utils.text_utils import normalize_latin
+                safe_filename = normalize_latin(filename)
+                filepath = os.path.join(self.download_folder, safe_filename)
                 attachment.SaveAsFile(filepath)
                 saved_files.append(filename)
 
