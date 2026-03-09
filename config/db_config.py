@@ -1,20 +1,4 @@
-# config/db_config.py
+from config.settings_loader import load_db_config
 
-# ==============================
-# SQL SERVER CONFIGURATION
-# ==============================
-
-DB_CONFIG = {
-    "driver": "ODBC Driver 17 for SQL Server",
-    "server": "THINKPAD-hro1",
-    "database": "DB228794",
-    "username": "gobabygo",
-    "password": "comeback",
-    "trusted_connection": False  # True si auth Windows
-}
-
-# ==============================
-# TABLE NAMES
-# ==============================
-
-TABLE_LOG_MAIL = "XXA_LOGMAIL_228794"
+DB_CONFIG = load_db_config()
+TABLE_LOG_MAIL = DB_CONFIG.get('table_log_mail', 'XXA_LOGMAIL_228794')

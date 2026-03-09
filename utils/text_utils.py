@@ -1,22 +1,18 @@
-# utils/text_utils.py
-
+import re
 import unicodedata
 
 
 def normalize_latin(text: str) -> str:
-    """
-    Convertit un texte Unicode en latin lisible :
-    - supprime accents
-    - supprime caractères non latins
-    """
     if not text:
-        return ""
-
-    # Normalisation Unicode (é → e, Ž → Z, etc.)
-    text = unicodedata.normalize("NFKD", text)
-
-    # Garde uniquement les caractères ASCII
-    text = text.encode("ascii", "ignore").decode("ascii")
-
-    # Nettoyage final
+        return ''
+    text = unicodedata.normalize('NFKD', str(text))
+    text = text.encode('ascii', 'ignore').decode('ascii')
+    text = re.sub(r'\s+', ' ', text)
     return text.strip()
+
+
+def normalize_latin_filename(text: str) -> str:
+    text = normalize_latin(text)
+    text = re.sub(r'[<>:"/\\|?*]', '_', text)
+    text = re.sub(r'\s+', ' ', text)
+    return text[:240].strip(' .')

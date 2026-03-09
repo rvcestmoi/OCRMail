@@ -1,5 +1,3 @@
-# database/mail_repository.py
-
 from database.connection import get_connection
 from config.db_config import TABLE_LOG_MAIL
 
@@ -15,13 +13,10 @@ class MailRepository:
         entry_id: str,
         nom_pdf: str,
         sujet: str,
-        expediteur: str
+        expediteur: str,
+        date_mail,
+        store_id: str | None,
     ):
-        """
-        Insert ou met à jour un enregistrement mail + PJ PDF
-        basé sur (entry_id, nom_pdf)
-        """
-
         merge_sql = f"""
         MERGE {TABLE_LOG_MAIL} AS target
         USING (
@@ -30,7 +25,9 @@ class MailRepository:
                 ? AS entry_id,
                 ? AS nom_pdf,
                 ? AS sujet,
-                ? AS expediteur
+                ? AS expediteur,
+                ? AS date_mail,
+                ? AS store_id
         ) AS source
         ON (
             target.entry_id = source.entry_id
@@ -41,23 +38,29 @@ class MailRepository:
                 message_id = source.message_id,
                 sujet = source.sujet,
                 expediteur = source.expediteur,
+                date_mail = source.date_mail,
+                store_id = source.store_id,
                 date_creation = SYSDATETIME()
         WHEN NOT MATCHED THEN
             INSERT (
                 date_creation,
+                date_mail,
                 message_id,
                 entry_id,
                 nom_pdf,
                 sujet,
-                expediteur
+                expediteur,
+                store_id
             )
             VALUES (
                 SYSDATETIME(),
+                source.date_mail,
                 source.message_id,
                 source.entry_id,
                 source.nom_pdf,
                 source.sujet,
-                source.expediteur
+                source.expediteur,
+                source.store_id
             );
         """
 
@@ -71,21 +74,20 @@ class MailRepository:
                     entry_id,
                     nom_pdf,
                     sujet,
-                    expediteur
+                    expediteur,
+                    date_mail,
+                    store_id,
                 )
             )
             self.connection.commit()
 
         except Exception as e:
             self.connection.rollback()
-            raise Exception(f"❌ Erreur MERGE XXA_LOGMAIL_228794 : {e}")
+            raise Exception(f"Erreur MERGE XXA_LOGMAIL_228794 : {e}")
 
         finally:
             cursor.close()
 
     def close(self):
-        """
-        Ferme proprement la connexion SQL
-        """
         if self.connection:
             self.connection.close()

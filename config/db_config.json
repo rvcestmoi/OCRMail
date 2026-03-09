@@ -1,0 +1,9 @@
+{
+  "driver": "ODBC Driver 17 for SQL Server",
+  "server": "THINKPAD-hro1",
+  "database": "DB228794",
+  "username": "gobabygo",
+  "password": "comeback",
+  "trusted_connection": false,
+  "table_log_mail": "XXA_LOGMAIL_228794"
+}

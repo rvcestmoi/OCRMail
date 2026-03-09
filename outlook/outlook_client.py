@@ -1,6 +1,5 @@
-# outlook/outlook_client.py
-
 import win32com.client
+from config.settings import OUTLOOK_FOLDER_PATH
 
 
 class OutlookClient:
@@ -12,12 +11,18 @@ class OutlookClient:
 
     def __init__(self):
         self.outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
-        self.inbox = self.outlook.GetDefaultFolder(self.INBOX_FOLDER_ID)
+
+        folder = self.outlook.GetDefaultFolder(self.INBOX_FOLDER_ID)
+
+        for folder_name in OUTLOOK_FOLDER_PATH:
+            folder = folder.Folders[folder_name]
+
+        self.folder = folder
 
     def get_messages_sorted(self):
         """
         Retourne la collection des messages triés par date de réception décroissante
         """
-        messages = self.inbox.Items
+        messages = self.folder.Items
         messages.Sort("[ReceivedTime]", True)
         return messages

@@ -1,0 +1,7 @@
+{
+  "mail_source_type": "outlook",
+  "outlook_folder_path": ["FASTFACT"],
+  "download_folder": "C:\\Users\\hrouillard\\Documents\\clients\\ED trans\\OCR\\modeles2",
+  "max_pdf": 50,
+  "allowed_extensions": [".pdf"]
+}
