@@ -8,7 +8,7 @@
 BASE_DIR = r"C:\git\OCRMail"
 
 # Dossier de téléchargement des pièces jointes
-DOWNLOAD_FOLDER = f"{BASE_DIR}\\data\\PJ"
+DOWNLOAD_FOLDER = r"C:\Users\hrouillard\Documents\clients\ED trans\OCR\modeles2"
 
 # ==============================
 # TRAITEMENT OUTLOOK
