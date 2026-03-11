@@ -9,6 +9,7 @@ from mail_sources.folder_mail_source import FolderMailSource
 from outlook.attachment_handler import AttachmentHandler
 from outlook.outlook_client import OutlookClient
 from utils.text_utils import normalize_latin, normalize_latin_filename
+from debug_first_pdf import run_debug_first_pdf
 
 
 def build_mail_source():
@@ -50,6 +51,25 @@ def read_message_fields(message):
 
 
 def main():
+
+    
+    print("Demarrage du loader PDF")
+    print("Source mail :", MAIL_SOURCE_TYPE)
+    print("Dossier input :", MAIL_INPUT_FOLDER)
+
+    try:
+        mail_source = build_mail_source()
+
+        # MODE DEBUG : affiche le nom du premier PDF du premier mail,
+        # puis quitte sans sauvegarde fichier ni insertion SQL
+        run_debug_first_pdf(mail_source)
+        return
+
+    except Exception as e:
+        print(f"Erreur globale : {e}")
+        raise
+
+    
     print("Demarrage du loader PDF")
     print("Source mail :", MAIL_SOURCE_TYPE)
     print("Dossier input :", MAIL_INPUT_FOLDER)
