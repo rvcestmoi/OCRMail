@@ -5,5 +5,6 @@
   "username": "gobabygo",
   "password": "comeback",
   "trusted_connection": false,
-  "table_log_mail": "XXA_LOGMAIL_228794"
+  "table_log_mail": "XXA_LOGMAIL_228794",
+  "table_settings": "XXA_SETTINGS_228794"
 }

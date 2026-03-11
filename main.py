@@ -3,21 +3,44 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from config.settings import BASE_DIR, DOWNLOAD_FOLDER, MAIL_INPUT_FOLDER, MAIL_SOURCE_TYPE, MAX_PDF
+from config.settings import (
+    ALLOWED_EXTENSIONS,
+    BASE_DIR,
+    DEBUG_FIRST_PDF,
+    DOWNLOAD_FOLDER,
+    MAIL_DATE_MIN,
+    MAIL_INPUT_FOLDER,
+    MAIL_SOURCE_TYPE,
+    MAX_PDF,
+)
 from database.mail_repository import MailRepository
+from database.settings_repository import SettingsRepository
+from debug_first_pdf import run_debug_first_pdf
 from mail_sources.folder_mail_source import FolderMailSource
 from outlook.attachment_handler import AttachmentHandler
 from outlook.outlook_client import OutlookClient
 from utils.text_utils import normalize_latin, normalize_latin_filename
-from debug_first_pdf import run_debug_first_pdf
+
+
+SETTING_KEY_MAIL_DATE_MIN = 'mail_date_min'
 
 
 def build_mail_source():
-    if MAIL_SOURCE_TYPE == "folder":
-        return FolderMailSource(Path(BASE_DIR) / MAIL_INPUT_FOLDER)
-    if MAIL_SOURCE_TYPE == "outlook":
-        return OutlookClient()
-    raise ValueError(f"Type de source mail inconnu : {MAIL_SOURCE_TYPE}")
+    if MAIL_SOURCE_TYPE == 'folder':
+        return FolderMailSource(Path(BASE_DIR) / MAIL_INPUT_FOLDER, date_min=MAIL_DATE_MIN)
+    if MAIL_SOURCE_TYPE == 'outlook':
+        return OutlookClient(date_min=MAIL_DATE_MIN)
+    raise ValueError(f'Type de source mail inconnu : {MAIL_SOURCE_TYPE}')
+
+
+def normalize_mail_datetime(value):
+    if value is None:
+        return None
+
+    if value.tzinfo is not None:
+        return value.replace(tzinfo=None)
+
+    return value
 
 
 def read_message_fields(message):
@@ -30,76 +53,88 @@ def read_message_fields(message):
     - mail_date
     - store_id
     """
-    if hasattr(message, "entry_id"):
+    if hasattr(message, 'entry_id'):
         return (
             message.entry_id,
             message.message_id or message.entry_id,
             normalize_latin(message.subject),
             normalize_latin(message.sender_email_address),
-            getattr(message, "received_time", None),
-            getattr(message, "store_id", None),
+            normalize_mail_datetime(getattr(message, 'received_time', None)),
+            getattr(message, 'store_id', None),
         )
 
     entry_id = message.EntryID
-    message_id = getattr(message, "InternetMessageID", None) or entry_id
-    subject = normalize_latin(getattr(message, "Subject", ""))
-    sender = normalize_latin(getattr(message, "SenderEmailAddress", ""))
-    mail_date = getattr(message, "ReceivedTime", None)
-    store_id = getattr(message.Parent, "StoreID", None)
+    message_id = getattr(message, 'InternetMessageID', None) or entry_id
+    subject = normalize_latin(getattr(message, 'Subject', ''))
+    sender = normalize_latin(getattr(message, 'SenderEmailAddress', ''))
+    mail_date = normalize_mail_datetime(getattr(message, 'ReceivedTime', None))
+    store_id = getattr(message.Parent, 'StoreID', None)
 
     return entry_id, message_id, subject, sender, mail_date, store_id
 
 
-def main():
 
-    
-    print("Demarrage du loader PDF")
-    print("Source mail :", MAIL_SOURCE_TYPE)
-    print("Dossier input :", MAIL_INPUT_FOLDER)
+def format_date_min_for_log():
+    if MAIL_DATE_MIN is None:
+        return 'aucun filtre'
+    return MAIL_DATE_MIN.strftime('%Y-%m-%d %H:%M:%S')
+
+
+
+def format_allowed_extensions_for_log():
+    return ', '.join(ALLOWED_EXTENSIONS)
+
+
+
+def main():
+    print('Demarrage du loader PJ')
+    print('Source mail :', MAIL_SOURCE_TYPE)
+    print('Dossier input :', MAIL_INPUT_FOLDER)
+    print('Date minimale :', format_date_min_for_log())
+    print('Extensions autorisees :', format_allowed_extensions_for_log())
+
+    mail_repo = None
+    settings_repo = None
+    attachment_limit_reached = False
+    max_seen_mail_date = MAIL_DATE_MIN
 
     try:
         mail_source = build_mail_source()
+        print(mail_source)
 
-        # MODE DEBUG : affiche le nom du premier PDF du premier mail,
-        # puis quitte sans sauvegarde fichier ni insertion SQL
-        run_debug_first_pdf(mail_source)
-        return
+       ## if True:
+         ##   run_debug_first_pdf(mail_source)
+          ##  return
 
-    except Exception as e:
-        print(f"Erreur globale : {e}")
-        raise
+        today_folder =  Path(DOWNLOAD_FOLDER)
+        attachment_handler = AttachmentHandler(str(today_folder), allowed_extensions=ALLOWED_EXTENSIONS)
+        mail_repo = MailRepository()
+        settings_repo = SettingsRepository()
+        settings_repo.ensure_table_exists()
+        attachment_count = 0
 
-    
-    print("Demarrage du loader PDF")
-    print("Source mail :", MAIL_SOURCE_TYPE)
-    print("Dossier input :", MAIL_INPUT_FOLDER)
-
-    today_folder = Path(BASE_DIR) / DOWNLOAD_FOLDER / datetime.now().strftime("%Y-%m-%d")
-
-    mail_source = build_mail_source()
-    attachment_handler = AttachmentHandler(str(today_folder))
-    mail_repo = MailRepository()
-    pdf_count = 0
-
-    try:
         messages = mail_source.get_messages_sorted()
-        print("Elements trouves :", len(messages))
+        print('Elements trouves :', len(messages))
 
         for message in messages:
-            if pdf_count >= MAX_PDF:
-                print(f"Termine : {MAX_PDF} PDF recuperes.")
+            if attachment_count >= MAX_PDF:
+                attachment_limit_reached = True
+                print(f'Termine : {MAX_PDF} piece(s) jointe(s) recuperee(s).')
                 break
 
             entry_id, message_id, subject, sender, mail_date, store_id = read_message_fields(message)
-            saved_pdfs = attachment_handler.save_pdf_attachments(message)
+            if mail_date is not None and (max_seen_mail_date is None or mail_date > max_seen_mail_date):
+                max_seen_mail_date = mail_date
 
-            for pdf_name in saved_pdfs:
-                safe_pdf_name = normalize_latin_filename(pdf_name)
+            saved_attachments = attachment_handler.save_allowed_attachments(message)
+
+            for attachment_name in saved_attachments:
+                safe_attachment_name = normalize_latin_filename(attachment_name)
 
                 mail_repo.upsert_mail_attachment(
                     message_id=message_id,
                     entry_id=entry_id,
-                    nom_pdf=safe_pdf_name,
+                    nom_pdf=safe_attachment_name,
                     sujet=subject,
                     expediteur=sender,
                     date_mail=mail_date,
@@ -107,26 +142,42 @@ def main():
                 )
 
                 print(
-                    f"PDF traite : {safe_pdf_name} | "
-                    f"sujet={subject} | "
-                    f"expediteur={sender} | "
-                    f"entry_id={entry_id} | "
-                    f"date_mail={mail_date}"
+                    f'PJ traitee : {safe_attachment_name} | '
+                    f'sujet={subject} | '
+                    f'expediteur={sender} | '
+                    f'entry_id={entry_id} | '
+                    f'date_mail={mail_date}'
                 )
 
-                pdf_count += 1
+                attachment_count += 1
 
-                if pdf_count >= MAX_PDF:
+                if attachment_count >= MAX_PDF:
+                    attachment_limit_reached = True
                     break
 
+        if not attachment_limit_reached and max_seen_mail_date is not None:
+            settings_repo.set_datetime_setting(SETTING_KEY_MAIL_DATE_MIN, max_seen_mail_date)
+            print(
+                'Setting SQL mis a jour : '
+                f"{SETTING_KEY_MAIL_DATE_MIN}={max_seen_mail_date.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        elif attachment_limit_reached:
+            print(
+                'Setting SQL non mis a jour car la limite MAX_PDF a ete atteinte. '
+                'Le curseur reste inchange pour eviter de sauter des messages.'
+            )
+
     except Exception as e:
-        print(f"Erreur globale : {e}")
+        print(f'Erreur globale : {e}')
         raise
 
     finally:
-        mail_repo.close()
-        print("Connexion SQL fermee")
+        if settings_repo is not None:
+            settings_repo.close()
+        if mail_repo is not None:
+            mail_repo.close()
+            print('Connexion SQL fermee')
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

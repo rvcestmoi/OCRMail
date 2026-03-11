@@ -1,33 +1,95 @@
-# outlook/attachment_handler.py
+from __future__ import annotations
 
 import os
+import shutil
+from pathlib import Path
+
+from mail_sources.folder_mail_source import FolderMessage
 from utils.text_utils import normalize_latin_filename
 
 
 class AttachmentHandler:
-    def __init__(self, download_folder: str):
+    PR_ATTACHMENT_HIDDEN = 'http://schemas.microsoft.com/mapi/proptag/0x7FFE000B'
+
+    def __init__(self, download_folder: str, allowed_extensions: list[str] | None = None):
         self.download_folder = download_folder
+        self.allowed_extensions = {ext.lower() for ext in (allowed_extensions or ['.pdf'])}
         os.makedirs(self.download_folder, exist_ok=True)
 
-    @staticmethod
-    def is_pdf(filename: str) -> bool:
-        return filename.lower().endswith(".pdf")
+    def is_allowed_file(self, filename: str) -> bool:
+        return Path(filename).suffix.lower() in self.allowed_extensions
 
-    def save_pdf_attachments(self, message):
+    def _build_destination_path(self, safe_filename: str) -> Path:
+        destination = Path(self.download_folder) / safe_filename
+        if not destination.exists():
+            return destination
+
+        stem = destination.stem
+        suffix = destination.suffix
+        index = 1
+        while True:
+            candidate = destination.with_name(f'{stem}_{index}{suffix}')
+            if not candidate.exists():
+                return candidate
+            index += 1
+
+    def _is_hidden_outlook_attachment(self, attachment) -> bool:
+        try:
+            accessor = getattr(attachment, 'PropertyAccessor', None)
+            if accessor is None:
+                return False
+            return bool(accessor.GetProperty(self.PR_ATTACHMENT_HIDDEN))
+        except Exception:
+            return False
+
+    def _save_folder_message_attachments(self, message: FolderMessage):
         saved_files = []
 
-        if message.Attachments.Count <= 0:
-            return saved_files
-
-        for i in range(1, message.Attachments.Count + 1):
-            attachment = message.Attachments.Item(i)
-
-            original_filename = attachment.FileName
+        for attachment_path in message.attachments:
+            original_filename = Path(attachment_path).name
             safe_filename = normalize_latin_filename(original_filename)
 
-            if self.is_pdf(safe_filename):
-                filepath = os.path.join(self.download_folder, safe_filename)
-                attachment.SaveAsFile(filepath)
-                saved_files.append(safe_filename)
+            if not self.is_allowed_file(safe_filename):
+                continue
+
+            destination = self._build_destination_path(safe_filename)
+            shutil.copy2(attachment_path, destination)
+            saved_files.append(destination.name)
 
         return saved_files
+
+    def save_allowed_attachments(self, message):
+        if isinstance(message, FolderMessage):
+            return self._save_folder_message_attachments(message)
+
+        saved_files = []
+        attachments = getattr(message, 'Attachments', None)
+
+        if attachments is None or attachments.Count <= 0:
+            return saved_files
+
+        for i in range(1, attachments.Count + 1):
+            attachment = attachments.Item(i)
+
+            original_filename = str(
+                getattr(attachment, 'FileName', '') or
+                getattr(attachment, 'DisplayName', '') or
+                ''
+            ).strip()
+
+            safe_filename = normalize_latin_filename(original_filename)
+
+            if not safe_filename:
+                continue
+
+            if not self.is_allowed_file(safe_filename):
+                continue
+
+            filepath = self._build_destination_path(safe_filename)
+            attachment.SaveAsFile(str(filepath))
+            saved_files.append(filepath.name)
+
+        return saved_files
+
+    def save_pdf_attachments(self, message):
+        return self.save_allowed_attachments(message)
