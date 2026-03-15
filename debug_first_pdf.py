@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import ctypes
-from pathlib import Path
 
 from mail_sources.folder_mail_source import FolderMessage
-from utils.text_utils import normalize_latin_filename
+from utils.text_utils import normalize_latin
 
 
-def _show_dialog(pdf_name: str):
-    # titre = nom du PDF, contenu = nom du PDF
-    ctypes.windll.user32.MessageBoxW(0, pdf_name, pdf_name, 0x40)
+def _show_dialog(title: str, message: str, icon: int = 0x40):
+    ctypes.windll.user32.MessageBoxW(0, message, title, icon)
 
 
 def _get_first_message(messages):
@@ -18,63 +16,39 @@ def _get_first_message(messages):
     return None
 
 
-def _get_pdf_names(message):
-    """
-    Compatible avec :
-    - FolderMailSource
-    - Outlook win32com
-    """
-
-    # Mode dossier local
+def _get_message_subject(message) -> str:
     if isinstance(message, FolderMessage):
-        return [
-            normalize_latin_filename(Path(p).name)
-            for p in message.attachments
-            if str(p).lower().endswith(".pdf")
-        ]
+        return normalize_latin(getattr(message, 'subject', '') or '')
 
-    # Mode Outlook
-    pdf_names = []
-    attachments = getattr(message, "Attachments", None)
-
-    if attachments is None or attachments.Count <= 0:
-        return pdf_names
-
-    for i in range(1, attachments.Count + 1):
-        attachment = attachments.Item(i)
-        filename = normalize_latin_filename(str(attachment.FileName))
-
-        if filename.lower().endswith(".pdf"):
-            pdf_names.append(filename)
-
-    return pdf_names
+    return normalize_latin(getattr(message, 'Subject', '') or '')
 
 
 def run_debug_first_pdf(mail_source):
-    messages = mail_source.get_messages_sorted()
-
     try:
-        count = len(messages)
-    except TypeError:
-        count = getattr(messages, "Count", "?")
+        messages = mail_source.get_messages_sorted()
 
-    print("Elements trouves :", count)
+        try:
+            count = len(messages)
+        except TypeError:
+            count = getattr(messages, 'Count', '?')
 
-    first_message = _get_first_message(messages)
+        print('Elements trouves :', count)
 
-    if first_message is None:
-        print("Aucun mail trouve.")
-        _show_dialog("Aucun mail trouve")
-        return
+        first_message = _get_first_message(messages)
 
-    pdf_names = _get_pdf_names(first_message)
+        if first_message is None:
+            print('Aucun mail trouve.')
+            _show_dialog('Debug Outlook', 'Aucun mail trouve dans le dossier', 0x10)
+            return
 
-    if not pdf_names:
-        print("Le premier mail ne contient aucun PDF.")
-        _show_dialog("Aucun PDF sur le premier mail")
-        return
+        subject = _get_message_subject(first_message).strip()
 
-    first_pdf_name = pdf_names[0]
+        if not subject:
+            subject = '(sans sujet)'
 
-    print("Premier PDF trouve :", first_pdf_name)
-    _show_dialog(first_pdf_name)
+        print('Premier mail trouve :', subject)
+        _show_dialog('Debug Outlook', subject, 0x40)
+
+    except Exception as e:
+        print(f'Erreur debug : {e}')
+        _show_dialog('Erreur debug Outlook', str(e), 0x10)

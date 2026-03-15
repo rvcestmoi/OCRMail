@@ -11,7 +11,8 @@ from config.settings import (
     MAIL_DATE_MIN,
     MAIL_INPUT_FOLDER,
     MAIL_SOURCE_TYPE,
-    MAX_PDF,
+    MAX_FILES_TO_FETCH,
+    OUTLOOK_MAILBOX,
 )
 from database.mail_repository import MailRepository
 from database.settings_repository import SettingsRepository
@@ -114,12 +115,11 @@ def main():
         attachment_count = 0
 
         messages = mail_source.get_messages_sorted()
-        print('Elements trouves :', len(messages))
-
         for message in messages:
-            if attachment_count >= MAX_PDF:
+
+            if attachment_count >= MAX_FILES_TO_FETCH:
                 attachment_limit_reached = True
-                print(f'Termine : {MAX_PDF} piece(s) jointe(s) recuperee(s).')
+                print(f'Termine : {MAX_FILES_TO_FETCH} piece(s) jointe(s) recuperee(s).')
                 break
 
             entry_id, message_id, subject, sender, mail_date, store_id = read_message_fields(message)
@@ -149,11 +149,11 @@ def main():
                     f'date_mail={mail_date}'
                 )
 
-                attachment_count += 1
+            attachment_count += 1
 
-                if attachment_count >= MAX_PDF:
-                    attachment_limit_reached = True
-                    break
+            if attachment_count >= MAX_FILES_TO_FETCH:
+                attachment_limit_reached = True
+                break
 
         if not attachment_limit_reached and max_seen_mail_date is not None:
             settings_repo.set_datetime_setting(SETTING_KEY_MAIL_DATE_MIN, max_seen_mail_date)

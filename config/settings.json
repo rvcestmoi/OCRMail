@@ -1,10 +1,11 @@
 {
   "mail_source_type": "outlook",
+  "outlook_mailbox": "herve.rouillard@lis.eu",
   "outlook_folder_path": [
     "FASTFACT"
   ],
   "download_folder": "C:\\Users\\hrouillard\\Documents\\clients\\ED trans\\OCR\\modeles2",
-  "max_pdf": 50,
+  "max_files_to_fetch": 50,
   "allowed_extensions": [
     ".pdf",
     ".png",

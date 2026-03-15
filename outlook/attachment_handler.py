@@ -6,6 +6,7 @@ from pathlib import Path
 
 from mail_sources.folder_mail_source import FolderMessage
 from utils.text_utils import normalize_latin_filename
+import time
 
 
 class AttachmentHandler:
@@ -47,7 +48,7 @@ class AttachmentHandler:
 
         for attachment_path in message.attachments:
             original_filename = Path(attachment_path).name
-            safe_filename = normalize_latin_filename(original_filename)
+            safe_filename = self._build_unique_filename(original_filename)
 
             if not self.is_allowed_file(safe_filename):
                 continue
@@ -77,7 +78,7 @@ class AttachmentHandler:
                 ''
             ).strip()
 
-            safe_filename = normalize_latin_filename(original_filename)
+            safe_filename = self._build_unique_filename(original_filename)
 
             if not safe_filename:
                 continue
@@ -93,3 +94,20 @@ class AttachmentHandler:
 
     def save_pdf_attachments(self, message):
         return self.save_allowed_attachments(message)
+    
+
+    def _build_unique_filename(self, original_filename: str) -> str:
+        path = Path(original_filename)
+
+        base_name = normalize_latin_filename(path.stem) or 'fichier'
+        suffix = path.suffix.lower()
+
+        unique_num = str(time.time_ns())
+
+        max_base_len = 240 - len(suffix) - len(unique_num) - 3  # ___
+        if max_base_len < 1:
+            max_base_len = 1
+
+        base_name = base_name[:max_base_len].strip(' ._')
+
+        return f'{base_name}___{unique_num}{suffix}'

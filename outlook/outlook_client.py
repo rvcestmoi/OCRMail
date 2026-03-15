@@ -46,6 +46,7 @@ class OutlookClient:
 
         return value
 
+
     @staticmethod
     def _norm(value) -> str:
         return str(value or "").strip().lower()
@@ -56,7 +57,6 @@ class OutlookClient:
         if not target:
             raise ValueError("Le setting 'outlook_mailbox' est vide.")
 
-        # 1) Recherche par comptes Outlook (le plus fiable si la boite est un vrai compte)
         accounts = self.outlook.Accounts
         for i in range(1, accounts.Count + 1):
             account = accounts.Item(i)
@@ -68,7 +68,6 @@ class OutlookClient:
                 delivery_store = account.DeliveryStore
                 return delivery_store.GetDefaultFolder(self.INBOX_FOLDER_ID)
 
-        # 2) Recherche par stores (utile pour boite partagée / boite supplémentaire)
         stores = self.outlook.Stores
         for i in range(1, stores.Count + 1):
             store = stores.Item(i)
@@ -77,23 +76,7 @@ class OutlookClient:
             if display_name == target or target in display_name:
                 return store.GetDefaultFolder(self.INBOX_FOLDER_ID)
 
-        available_accounts = []
-        for i in range(1, accounts.Count + 1):
-            account = accounts.Item(i)
-            smtp_address = getattr(account, "SmtpAddress", "")
-            display_name = getattr(account, "DisplayName", "")
-            available_accounts.append(f"{display_name} / {smtp_address}")
-
-        available_stores = []
-        for i in range(1, stores.Count + 1):
-            store = stores.Item(i)
-            available_stores.append(str(getattr(store, "DisplayName", "")))
-
-        raise ValueError(
-            "Boite Outlook introuvable pour 'outlook_mailbox'="
-            f"{mailbox_name}. Comptes disponibles: {available_accounts}. "
-            f"Stores disponibles: {available_stores}"
-        )
+        raise ValueError(f"Boite Outlook introuvable : {mailbox_name}")
 
     def get_messages_sorted(self):
         """
