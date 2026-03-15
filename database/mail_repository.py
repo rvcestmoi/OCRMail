@@ -83,8 +83,21 @@ class MailRepository:
 
         except Exception as e:
             self.connection.rollback()
-            raise Exception(f"Erreur MERGE XXA_LOGMAIL_228794 : {e}")
+            raise Exception(f"Erreur MERGE {TABLE_LOG_MAIL} : {e}")
 
+        finally:
+            cursor.close()
+
+    def exists_entry_id(self, entry_id: str) -> bool:
+        sql = f"SELECT TOP 1 1 FROM {TABLE_LOG_MAIL} WHERE entry_id = ?"
+        cursor = self.connection.cursor()
+
+        try:
+            cursor.execute(sql, (entry_id,))
+            row = cursor.fetchone()
+            return row is not None
+        except Exception as e:
+            raise Exception(f"Erreur lecture {TABLE_LOG_MAIL} sur entry_id : {e}")
         finally:
             cursor.close()
 

@@ -1,21 +1,40 @@
 {
-  "mail_source_type": "outlook",
-  "outlook_mailbox": "herve.rouillard@lis.eu",
-  "outlook_folder_path": [
-    "FASTFACT"
-  ],
-  "download_folder": "C:\\Users\\hrouillard\\Documents\\clients\\ED trans\\OCR\\modeles2",
-  "max_files_to_fetch": 50,
-  "allowed_extensions": [
-    ".pdf",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".tif",
-    ".tiff",
-    ".bmp",
-    ".gif",
-    ".webp"
-  ],
-  "debug_first_pdf": false
+  "database": {
+    "driver": "ODBC Driver 17 for SQL Server",
+    "server": "THINKPAD-hro1",
+    "database": "DB228794",
+    "username": "gobabygo",
+    "password": "comeback",
+    "trusted_connection": false,
+    "table_log_mail": "XXA_LOGMAIL_228794"
+  },
+  "mail": {
+    "source_type": "outlook",
+    "input_folder": "FASTFACT"
+  },
+  "outlook": {
+    "mailbox": "herve.rouillard@lis.eu",
+    "folder_path": [
+      "FASTFACT"
+    ]
+  },
+  "folders": {
+    "download_folder": "C:\\Users\\hrouillard\\Documents\\clients\\ED trans\\OCR\\modeles2"
+  },
+  "processing": {
+    "max_files_to_fetch": 50,
+    "allowed_extensions": [
+      ".pdf",
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".tif",
+      ".tiff",
+      ".bmp",
+      ".gif",
+      ".webp"
+    ],
+    "mail_date_min": "2026-03-10 16:29:03",
+    "debug_first_pdf": false
+  }
 }

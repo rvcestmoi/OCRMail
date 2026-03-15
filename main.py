@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 from config.settings import (
@@ -12,10 +11,9 @@ from config.settings import (
     MAIL_INPUT_FOLDER,
     MAIL_SOURCE_TYPE,
     MAX_FILES_TO_FETCH,
-    OUTLOOK_MAILBOX,
 )
+from config.settings_loader import save_setting
 from database.mail_repository import MailRepository
-from database.settings_repository import SettingsRepository
 from debug_first_pdf import run_debug_first_pdf
 from mail_sources.folder_mail_source import FolderMailSource
 from outlook.attachment_handler import AttachmentHandler
@@ -95,7 +93,6 @@ def main():
     print('Extensions autorisees :', format_allowed_extensions_for_log())
 
     mail_repo = None
-    settings_repo = None
     attachment_limit_reached = False
     max_seen_mail_date = MAIL_DATE_MIN
 
@@ -103,20 +100,17 @@ def main():
         mail_source = build_mail_source()
         print(mail_source)
 
-       ## if True:
-         ##   run_debug_first_pdf(mail_source)
-          ##  return
+        if DEBUG_FIRST_PDF:
+            run_debug_first_pdf(mail_source)
+            return
 
-        today_folder =  Path(DOWNLOAD_FOLDER)
+        today_folder = Path(DOWNLOAD_FOLDER)
         attachment_handler = AttachmentHandler(str(today_folder), allowed_extensions=ALLOWED_EXTENSIONS)
         mail_repo = MailRepository()
-        settings_repo = SettingsRepository()
-        settings_repo.ensure_table_exists()
         attachment_count = 0
 
         messages = mail_source.get_messages_sorted()
         for message in messages:
-
             if attachment_count >= MAX_FILES_TO_FETCH:
                 attachment_limit_reached = True
                 print(f'Termine : {MAX_FILES_TO_FETCH} piece(s) jointe(s) recuperee(s).')
@@ -125,6 +119,13 @@ def main():
             entry_id, message_id, subject, sender, mail_date, store_id = read_message_fields(message)
             if mail_date is not None and (max_seen_mail_date is None or mail_date > max_seen_mail_date):
                 max_seen_mail_date = mail_date
+
+            if mail_repo.exists_entry_id(entry_id):
+                print(
+                    f'Mail ignore (entry_id deja present) : ' 
+                    f'sujet={subject} | entry_id={entry_id} | date_mail={mail_date}'
+                )
+                continue
 
             saved_attachments = attachment_handler.save_allowed_attachments(message)
 
@@ -149,21 +150,24 @@ def main():
                     f'date_mail={mail_date}'
                 )
 
-            attachment_count += 1
+                attachment_count += 1
+                if attachment_count >= MAX_FILES_TO_FETCH:
+                    attachment_limit_reached = True
+                    break
 
-            if attachment_count >= MAX_FILES_TO_FETCH:
-                attachment_limit_reached = True
+            if attachment_limit_reached:
+                print(f'Termine : {MAX_FILES_TO_FETCH} piece(s) jointe(s) recuperee(s).')
                 break
 
         if not attachment_limit_reached and max_seen_mail_date is not None:
-            settings_repo.set_datetime_setting(SETTING_KEY_MAIL_DATE_MIN, max_seen_mail_date)
+            save_setting(SETTING_KEY_MAIL_DATE_MIN, max_seen_mail_date)
             print(
-                'Setting SQL mis a jour : '
+                'Setting JSON mis a jour : '
                 f"{SETTING_KEY_MAIL_DATE_MIN}={max_seen_mail_date.strftime('%Y-%m-%d %H:%M:%S')}"
             )
         elif attachment_limit_reached:
             print(
-                'Setting SQL non mis a jour car la limite MAX_PDF a ete atteinte. '
+                'Setting JSON non mis a jour car la limite MAX_FILES_TO_FETCH a ete atteinte. '
                 'Le curseur reste inchange pour eviter de sauter des messages.'
             )
 
@@ -172,8 +176,6 @@ def main():
         raise
 
     finally:
-        if settings_repo is not None:
-            settings_repo.close()
         if mail_repo is not None:
             mail_repo.close()
             print('Connexion SQL fermee')

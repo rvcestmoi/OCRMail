@@ -1,116 +1,62 @@
 # OCRMail
 
-Structure refactorisee :
-- les chemins et options sont lus depuis `config/settings.json`
-- la connexion SQL Server est lue depuis `config/db_config.json`
-- pour les tests, la source des mails peut etre un dossier
-- pour repasser sur Outlook, mettre `"mail_source_type": "outlook"` dans `config/settings.json`
+Le projet lit maintenant **toute sa configuration depuis `config/settings.json`**.
 
-## Nouveau filtre par date
+Il n'y a plus de dependance fonctionnelle a une table SQL de settings pour :
+- la connexion SQL Server ;
+- la boite Outlook et le chemin du dossier ;
+- le dossier de telechargement ;
+- la date minimale de recuperation ;
+- les extensions autorisees ;
+- le mode debug.
 
-Dans `config/settings.json`, tu peux maintenant definir une date minimale de traitement via `mail_date_min`.
-
-Exemple :
+## Structure du fichier `config/settings.json`
 
 ```json
 {
-  "mail_source_type": "outlook",
-  "outlook_folder_path": ["FASTFACT"],
-  "download_folder": "C:\\Users\\hrouillard\\Documents\\clients\\ED trans\\OCR\\modeles2",
-  "max_pdf": 50,
-  "allowed_extensions": [".pdf"],
-  "mail_date_min": "2026-03-01 00:00:00",
-  "debug_first_pdf": false
+  "database": {
+    "driver": "ODBC Driver 17 for SQL Server",
+    "server": "THINKPAD-hro1",
+    "database": "DB228794",
+    "username": "gobabygo",
+    "password": "comeback",
+    "trusted_connection": false,
+    "table_log_mail": "XXA_LOGMAIL_228794"
+  },
+  "mail": {
+    "source_type": "outlook",
+    "input_folder": "FASTFACT"
+  },
+  "outlook": {
+    "mailbox": "invoice@ed-trans.com",
+    "folder_path": ["FASTFACT"]
+  },
+  "folders": {
+    "download_folder": "C:\\temp\\OCRMail"
+  },
+  "processing": {
+    "max_files_to_fetch": 50,
+    "allowed_extensions": [".pdf", ".png", ".jpg", ".jpeg"],
+    "mail_date_min": "2026-03-01 00:00:00",
+    "debug_first_pdf": false
+  }
 }
 ```
 
-Formats acceptes pour `mail_date_min` :
+## Date minimale
+
+`processing.mail_date_min` accepte :
 - `YYYY-MM-DD`
 - `YYYY-MM-DD HH:MM:SS`
 - `DD/MM/YYYY`
 - `DD/MM/YYYY HH:MM:SS`
 
-Comportement :
-- en mode `outlook`, seuls les mails recus a partir de cette date sont lus
-- en mode `folder`, seuls les fichiers modifies a partir de cette date sont pris
-- si `mail_date_min` est vide ou absent, aucun filtre n'est applique
+Si la valeur est vide ou `null`, aucun filtre n'est applique.
 
-## Debug du premier PDF
+En fin de traitement complet, le programme met a jour automatiquement `processing.mail_date_min` dans `config/settings.json`.
 
-Le mode debug n'est plus force dans le code.
+Si la limite `processing.max_files_to_fetch` est atteinte, la date n'est pas mise a jour pour eviter de sauter des messages.
 
-Pour afficher uniquement le premier PDF trouve puis quitter, utilise :
+## Compatibilite
 
-```json
-"debug_first_pdf": true
-```
-
-Sinon laisse :
-
-```json
-"debug_first_pdf": false
-```
-
-
-## Settings SQL Server
-
-La date minimale n'est plus lue en priorité dans `config/settings.json`.
-Elle est maintenant chargée depuis la table SQL Server `XXA_SETTINGS_228794`.
-
-### Clé utilisée
-
-- `mail_date_min` : date minimale de lecture des mails au format `YYYY-MM-DD HH:MM:SS`
-
-### Script SQL
-
-Voir `database/create_settings_table.sql`.
-
-### Comportement
-
-- au démarrage, le programme crée la table si elle n'existe pas ;
-- les settings SQL remplacent les valeurs du fichier JSON si la même clé existe ;
-- après un traitement complet, `mail_date_min` est mise à jour avec la date la plus récente lue ;
-- si `MAX_PDF` est atteint, la valeur n'est pas mise à jour pour éviter de sauter des messages.
-
-
-## Pieces jointes autorisees
-
-Le programme peut maintenant recuperer les PDF et les images autorisees.
-
-Extensions autorisees par defaut :
-- `.pdf`
-- `.png`
-- `.jpg`
-- `.jpeg`
-- `.tif`
-- `.tiff`
-- `.bmp`
-- `.gif`
-- `.webp`
-
-Tu peux surcharger cette liste depuis :
-- `config/settings.json` avec un tableau JSON ;
-- la table SQL Server des settings avec la cle `allowed_extensions` et une valeur de type `.pdf,.png,.jpg`.
-
-Exemple JSON :
-
-```json
-{
-  "allowed_extensions": [".pdf", ".png", ".jpg", ".jpeg"]
-}
-```
-
-Exemple SQL :
-
-```sql
-MERGE XXA_SETTINGS_228794 AS target
-USING (SELECT 'allowed_extensions' AS setting_key, '.pdf,.png,.jpg,.jpeg' AS setting_value) AS source
-ON target.setting_key = source.setting_key
-WHEN MATCHED THEN
-    UPDATE SET setting_value = source.setting_value, updated_at = SYSDATETIME()
-WHEN NOT MATCHED THEN
-    INSERT (setting_key, setting_value, updated_at)
-    VALUES (source.setting_key, source.setting_value, SYSDATETIME());
-```
-
-Remarque : les images inline masquees d'Outlook sont ignorees pour eviter de recuperer les logos de signature.
+Le chargeur garde une compatibilite avec les anciennes cles plates si besoin, mais la structure recommandee est celle ci-dessus.

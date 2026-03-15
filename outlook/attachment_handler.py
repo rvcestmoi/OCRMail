@@ -34,6 +34,42 @@ class AttachmentHandler:
                 return candidate
             index += 1
 
+    def _normalize_attachment_parts(self, original_filename: str) -> tuple[str, str]:
+        path = Path(original_filename)
+
+        base_name = normalize_latin_filename(path.stem) or 'fichier'
+        suffix = path.suffix.lower()
+
+        # Les noms sauvegardes suivent le format: nom___numunique.ext
+        # time.time_ns() renvoie actuellement 19 chiffres sur Windows/Python 3.11+.
+        unique_len = 19
+        max_base_len = 240 - len(suffix) - unique_len - 3  # ___
+        if max_base_len < 1:
+            max_base_len = 1
+
+        base_name = base_name[:max_base_len].strip(' ._') or 'fichier'
+        return base_name, suffix
+
+    def _already_saved(self, original_filename: str) -> bool:
+        base_name, suffix = self._normalize_attachment_parts(original_filename)
+        prefix = f'{base_name}___'
+
+        for existing_path in Path(self.download_folder).iterdir():
+            if not existing_path.is_file():
+                continue
+
+            existing_name = existing_path.name
+            existing_suffix = existing_path.suffix.lower()
+            existing_stem = existing_path.stem
+
+            if existing_suffix != suffix:
+                continue
+
+            if existing_stem == base_name or existing_stem.startswith(prefix):
+                return True
+
+        return False
+
     def _is_hidden_outlook_attachment(self, attachment) -> bool:
         try:
             accessor = getattr(attachment, 'PropertyAccessor', None)
@@ -48,11 +84,12 @@ class AttachmentHandler:
 
         for attachment_path in message.attachments:
             original_filename = Path(attachment_path).name
-            safe_filename = self._build_unique_filename(original_filename)
 
-            if not self.is_allowed_file(safe_filename):
+            if not self.is_allowed_file(original_filename):
                 continue
 
+
+            safe_filename = self._build_unique_filename(original_filename)
             destination = self._build_destination_path(safe_filename)
             shutil.copy2(attachment_path, destination)
             saved_files.append(destination.name)
@@ -78,14 +115,14 @@ class AttachmentHandler:
                 ''
             ).strip()
 
+            if not original_filename:
+                continue
+
+            if not self.is_allowed_file(original_filename):
+                continue
+
+
             safe_filename = self._build_unique_filename(original_filename)
-
-            if not safe_filename:
-                continue
-
-            if not self.is_allowed_file(safe_filename):
-                continue
-
             filepath = self._build_destination_path(safe_filename)
             attachment.SaveAsFile(str(filepath))
             saved_files.append(filepath.name)
@@ -97,17 +134,6 @@ class AttachmentHandler:
     
 
     def _build_unique_filename(self, original_filename: str) -> str:
-        path = Path(original_filename)
-
-        base_name = normalize_latin_filename(path.stem) or 'fichier'
-        suffix = path.suffix.lower()
-
+        base_name, suffix = self._normalize_attachment_parts(original_filename)
         unique_num = str(time.time_ns())
-
-        max_base_len = 240 - len(suffix) - len(unique_num) - 3  # ___
-        if max_base_len < 1:
-            max_base_len = 1
-
-        base_name = base_name[:max_base_len].strip(' ._')
-
         return f'{base_name}___{unique_num}{suffix}'
