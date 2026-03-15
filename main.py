@@ -94,7 +94,8 @@ def main():
 
     mail_repo = None
     attachment_limit_reached = False
-    max_seen_mail_date = MAIL_DATE_MIN
+    last_cursor_mail_date = MAIL_DATE_MIN
+    cursor_can_be_saved = False
 
     try:
         mail_source = build_mail_source()
@@ -117,12 +118,13 @@ def main():
                 break
 
             entry_id, message_id, subject, sender, mail_date, store_id = read_message_fields(message)
-            if mail_date is not None and (max_seen_mail_date is None or mail_date > max_seen_mail_date):
-                max_seen_mail_date = mail_date
+            if mail_date is not None:
+                last_cursor_mail_date = mail_date
+                cursor_can_be_saved = True
 
             if mail_repo.exists_entry_id(entry_id):
                 print(
-                    f'Mail ignore (entry_id deja present) : ' 
+                    f'Mail ignore (entry_id deja present) : '
                     f'sujet={subject} | entry_id={entry_id} | date_mail={mail_date}'
                 )
                 continue
@@ -159,17 +161,14 @@ def main():
                 print(f'Termine : {MAX_FILES_TO_FETCH} piece(s) jointe(s) recuperee(s).')
                 break
 
-        if not attachment_limit_reached and max_seen_mail_date is not None:
-            save_setting(SETTING_KEY_MAIL_DATE_MIN, max_seen_mail_date)
+        if cursor_can_be_saved and last_cursor_mail_date is not None:
+            save_setting(SETTING_KEY_MAIL_DATE_MIN, last_cursor_mail_date)
             print(
                 'Setting JSON mis a jour : '
-                f"{SETTING_KEY_MAIL_DATE_MIN}={max_seen_mail_date.strftime('%Y-%m-%d %H:%M:%S')}"
+                f"{SETTING_KEY_MAIL_DATE_MIN}={last_cursor_mail_date.strftime('%Y-%m-%d %H:%M:%S')}"
             )
-        elif attachment_limit_reached:
-            print(
-                'Setting JSON non mis a jour car la limite MAX_FILES_TO_FETCH a ete atteinte. '
-                'Le curseur reste inchange pour eviter de sauter des messages.'
-            )
+        else:
+            print('Setting JSON inchange : aucun message date a parcourir.')
 
     except Exception as e:
         print(f'Erreur globale : {e}')

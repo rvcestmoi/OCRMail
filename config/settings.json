@@ -34,7 +34,7 @@
       ".gif",
       ".webp"
     ],
-    "mail_date_min": "2026-03-10 16:29:03",
+    "mail_date_min": null,
     "debug_first_pdf": false
   }
 }

@@ -46,7 +46,6 @@ class OutlookClient:
 
         return value
 
-
     @staticmethod
     def _norm(value) -> str:
         return str(value or "").strip().lower()
@@ -80,11 +79,11 @@ class OutlookClient:
 
     def get_messages_sorted(self):
         """
-        Retourne la liste des messages triés par date de réception décroissante.
+        Retourne la liste des messages triés du plus ancien au plus récent.
         Si date_min est renseignée, seuls les messages reçus à partir de cette date sont conservés.
         """
         items = self.folder.Items
-        items.Sort("[ReceivedTime]", True)
+        items.Sort("[ReceivedTime]", False)
 
         messages = []
         item = items.GetFirst()
@@ -93,7 +92,8 @@ class OutlookClient:
             received_dt = self._to_python_datetime(getattr(item, "ReceivedTime", None))
 
             if self.date_min is not None and received_dt is not None and received_dt < self.date_min:
-                break
+                item = items.GetNext()
+                continue
 
             messages.append(item)
             item = items.GetNext()

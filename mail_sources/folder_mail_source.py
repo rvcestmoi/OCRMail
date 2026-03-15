@@ -29,7 +29,7 @@ class FolderMailSource:
             raise FileNotFoundError(f"Dossier source introuvable : {self.input_folder}")
 
         files = [p for p in self.input_folder.iterdir() if p.is_file()]
-        files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        files.sort(key=lambda p: p.stat().st_mtime)
 
         messages: List[FolderMessage] = []
         for file_path in files:
