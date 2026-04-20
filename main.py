@@ -19,6 +19,9 @@ from mail_sources.folder_mail_source import FolderMailSource
 from outlook.attachment_handler import AttachmentHandler
 from outlook.outlook_client import OutlookClient
 from utils.text_utils import normalize_latin, normalize_latin_filename
+import os
+import sys
+import json
 
 
 SETTING_KEY_MAIL_DATE_MIN = 'mail_date_min'
@@ -91,7 +94,7 @@ def main():
     print('Dossier input :', MAIL_INPUT_FOLDER)
     print('Date minimale :', format_date_min_for_log())
     print('Extensions autorisees :', format_allowed_extensions_for_log())
-
+    from config.settings_loader import SETTINGS_FILE
     mail_repo = None
     attachment_limit_reached = False
     last_cursor_mail_date = MAIL_DATE_MIN
@@ -99,7 +102,6 @@ def main():
 
     try:
         mail_source = build_mail_source()
-        print(mail_source)
 
         if DEBUG_FIRST_PDF:
             run_debug_first_pdf(mail_source)
@@ -161,7 +163,7 @@ def main():
                 print(f'Termine : {MAX_FILES_TO_FETCH} piece(s) jointe(s) recuperee(s).')
                 break
 
-        if cursor_can_be_saved and last_cursor_mail_date is not None:
+        if not attachment_limit_reached and cursor_can_be_saved and last_cursor_mail_date is not None:
             save_setting(SETTING_KEY_MAIL_DATE_MIN, last_cursor_mail_date)
             print(
                 'Setting JSON mis a jour : '
@@ -178,6 +180,27 @@ def main():
         if mail_repo is not None:
             mail_repo.close()
             print('Connexion SQL fermee')
+
+
+
+def get_app_dir() -> str:
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def get_settings_path() -> str:
+    return os.path.join(get_app_dir(), "settings", "settings.json")
+
+
+def load_settings() -> dict:
+    settings_path = get_settings_path()
+
+    if not os.path.exists(settings_path):
+        raise FileNotFoundError(f"Fichier settings introuvable : {settings_path}")
+
+    with open(settings_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 if __name__ == '__main__':

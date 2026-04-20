@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import os
 import shutil
+import tempfile
+import time
+import zipfile
 from pathlib import Path
 
 from mail_sources.folder_mail_source import FolderMessage
 from utils.text_utils import normalize_latin_filename
-import time
 
 
 class AttachmentHandler:
@@ -19,6 +21,9 @@ class AttachmentHandler:
 
     def is_allowed_file(self, filename: str) -> bool:
         return Path(filename).suffix.lower() in self.allowed_extensions
+
+    def is_zip_file(self, filename: str) -> bool:
+        return Path(filename).suffix.lower() == '.zip'
 
     def _build_destination_path(self, safe_filename: str) -> Path:
         destination = Path(self.download_folder) / safe_filename
@@ -79,20 +84,56 @@ class AttachmentHandler:
         except Exception:
             return False
 
+    def _build_unique_filename(self, original_filename: str) -> str:
+        base_name, suffix = self._normalize_attachment_parts(original_filename)
+        unique_num = str(time.time_ns())
+        return f'{base_name}___{unique_num}{suffix}'
+
+    def _save_regular_file(self, source_path: str | Path, original_filename: str) -> str:
+        safe_filename = self._build_unique_filename(original_filename)
+        destination = self._build_destination_path(safe_filename)
+        shutil.copy2(source_path, destination)
+        return destination.name
+
+    def _extract_zip_to_download_folder(self, zip_path: str | Path) -> list[str]:
+        saved_files: list[str] = []
+
+        with zipfile.ZipFile(zip_path, 'r') as archive:
+            for member in archive.infolist():
+                if member.is_dir():
+                    continue
+
+                original_filename = Path(member.filename).name.strip()
+                if not original_filename:
+                    continue
+
+                if not self.is_allowed_file(original_filename):
+                    continue
+
+                safe_filename = self._build_unique_filename(original_filename)
+                destination = self._build_destination_path(safe_filename)
+
+                with archive.open(member, 'r') as source, open(destination, 'wb') as target:
+                    shutil.copyfileobj(source, target)
+
+                saved_files.append(destination.name)
+
+        return saved_files
+
     def _save_folder_message_attachments(self, message: FolderMessage):
         saved_files = []
 
         for attachment_path in message.attachments:
             original_filename = Path(attachment_path).name
 
+            if self.is_zip_file(original_filename):
+                saved_files.extend(self._extract_zip_to_download_folder(attachment_path))
+                continue
+
             if not self.is_allowed_file(original_filename):
                 continue
 
-
-            safe_filename = self._build_unique_filename(original_filename)
-            destination = self._build_destination_path(safe_filename)
-            shutil.copy2(attachment_path, destination)
-            saved_files.append(destination.name)
+            saved_files.append(self._save_regular_file(attachment_path, original_filename))
 
         return saved_files
 
@@ -109,6 +150,9 @@ class AttachmentHandler:
         for i in range(1, attachments.Count + 1):
             attachment = attachments.Item(i)
 
+            if self._is_hidden_outlook_attachment(attachment):
+                continue
+
             original_filename = str(
                 getattr(attachment, 'FileName', '') or
                 getattr(attachment, 'DisplayName', '') or
@@ -118,9 +162,15 @@ class AttachmentHandler:
             if not original_filename:
                 continue
 
-            if not self.is_allowed_file(original_filename):
+            if self.is_zip_file(original_filename):
+                with tempfile.TemporaryDirectory(prefix='ocrmail_zip_') as temp_dir:
+                    temp_zip_path = Path(temp_dir) / normalize_latin_filename(original_filename)
+                    attachment.SaveAsFile(str(temp_zip_path))
+                    saved_files.extend(self._extract_zip_to_download_folder(temp_zip_path))
                 continue
 
+            if not self.is_allowed_file(original_filename):
+                continue
 
             safe_filename = self._build_unique_filename(original_filename)
             filepath = self._build_destination_path(safe_filename)
@@ -131,9 +181,3 @@ class AttachmentHandler:
 
     def save_pdf_attachments(self, message):
         return self.save_allowed_attachments(message)
-    
-
-    def _build_unique_filename(self, original_filename: str) -> str:
-        base_name, suffix = self._normalize_attachment_parts(original_filename)
-        unique_num = str(time.time_ns())
-        return f'{base_name}___{unique_num}{suffix}'

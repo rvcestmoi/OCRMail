@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-BASE_DIR = Path(__file__).resolve().parents[1]
-SETTINGS_FILE = BASE_DIR / 'config' / 'settings.json'
+
+def get_app_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parents[1]
+
+
+BASE_DIR = get_app_dir()
+SETTINGS_FILE = BASE_DIR / "settings" / "settings.json"
 
 
 DATE_FORMATS = (
@@ -30,6 +38,7 @@ SETTING_PATHS = {
     'mail_source_type': ('mail', 'source_type'),
     'mail_input_folder': ('mail', 'input_folder'),
     'outlook_mailbox': ('outlook', 'mailbox'),
+    'outlook_folder_base': ('outlook', 'folder_base'),
     'outlook_folder_path': ('outlook', 'folder_path'),
     'download_folder': ('folders', 'download_folder'),
     'max_files_to_fetch': ('processing', 'max_files_to_fetch'),
@@ -162,15 +171,18 @@ def load_settings() -> dict:
             'mail_input_folder': 'input_folder',
         },
     )
+
     _copy_section(
         settings,
         raw_settings,
         'outlook',
         {
             'outlook_mailbox': 'mailbox',
+            'outlook_folder_base': 'folder_base',
             'outlook_folder_path': 'folder_path',
         },
     )
+
     _copy_section(
         settings,
         raw_settings,
@@ -195,7 +207,7 @@ def load_settings() -> dict:
     settings['allowed_extensions'] = parse_allowed_extensions(settings.get('allowed_extensions'))
     settings['debug_first_pdf'] = parse_bool(settings.get('debug_first_pdf'), default=False)
     settings['trusted_connection'] = parse_bool(settings.get('trusted_connection'), default=False)
-    settings['max_files_to_fetch'] = int(settings.get('max_files_to_fetch', settings.get('max_pdf', 50)))
+    settings['max_files_to_fetch'] = int(settings.get('max_files_to_fetch', settings.get('max_pdf', 800)))
     return settings
 
 
